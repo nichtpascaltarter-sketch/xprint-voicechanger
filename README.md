@@ -92,7 +92,7 @@ python -m pip install -r requirements.txt
 python main.py
 
 # Single-File .exe bauen
-build.bat
+.\build.bat
 # -> dist\XPrint-VoiceChanger.exe
 ```
 
