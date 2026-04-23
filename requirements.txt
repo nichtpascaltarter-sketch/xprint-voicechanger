@@ -1,10 +1,35 @@
 # X-Print Voice Changer - Dependencies
-# Getestet mit Python 3.11 auf Windows 10/11 x64
+# =====================================================================
+# Optimiert für Python 3.15.0a8 (Alpha) - ohne harte Versions-Pins,
+# damit pip die neuesten 3.15-kompatiblen Wheels findet.
+#
+# Installieren mit:
+#   pip install --pre -r requirements.txt
+#
+# Falls einzelne Wheels fehlen (typisch in der Alpha-Phase):
+#   pip install --pre --no-binary=:all: <paketname>
+# (kompiliert aus dem Sourcecode - benötigt MSVC Build Tools)
+# =====================================================================
 
-customtkinter==5.2.2
-sounddevice==0.4.7
-numpy==1.26.4
-pedalboard==0.9.16
+# --- GUI ---
+# Pure-Python (Tkinter-Wrapper). Funktioniert mit jeder 3.x-Version.
+customtkinter>=5.2.2
 
-# Build-Zeit (optional, von build.bat installiert)
-# pyinstaller==6.11.1
+# --- Audio I/O ---
+# Pure-Python-Wrapper um PortAudio. CFFI-basiert, lädt fertige DLL mit.
+sounddevice>=0.5.1
+
+# --- Numerik (C-Extension) ---
+# Numpy 2.1+ liefert moderne Wheels und arbeitet mit cpython-stable-ABI.
+numpy>=2.1.0
+
+# --- Audio-Effekte (C++-Extension!) ---
+# pedalboard ist die kritischste Dependency: C++ via pybind11.
+# Ab Version 0.9.20 mit breiterem Python-Version-Support.
+# Falls für 3.15 noch kein Wheel existiert -> siehe README "Alpha-Build".
+pedalboard>=0.9.20
+
+# =====================================================================
+# Build-Zeit (NICHT zur Laufzeit nötig - wird von build.bat installiert)
+# =====================================================================
+# pyinstaller>=6.11.1
