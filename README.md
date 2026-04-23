@@ -1,6 +1,7 @@
 # X-PRINT // VOICE CHANGER
 
 **Echtzeit-Stimmverzerrer für Windows** – Discord-ready – X-Print Industrial Design.
+**Optimiert für Python 3.15.0a8** mit Fallbacks für 3.11 / 3.12 / 3.13.
 
 ```
 ╔══════════════════════════════════════════════════════════╗
@@ -20,10 +21,49 @@
 - **Animierte Level-Meter** mit dB-Anzeige, Peak-Hold und −6/−12 dB-Markierungen
 - **Zielatenz < 50 ms** bei Buffer 256 Samples @ 48 kHz
 - **Hotkeys** – F1 Bypass, F2 Erwachsen, F3 Baby
+- **Python 3.15-Alpha-aware** – defensive Imports + Pre-Release-Wheels
 
 ---
 
-## 📦 INSTALLATION
+## 🧪 PYTHON 3.15-ALPHA – WICHTIGE HINWEISE
+
+Python 3.15.0a8 ist eine **Alpha-Version**. Drittanbieter-Pakete liefern in dieser Phase nicht immer fertige Wheels. Das Projekt ist trotzdem darauf ausgelegt zu funktionieren – es braucht nur den richtigen Install-Pfad.
+
+### Zwei mögliche Szenarien
+
+**Szenario A — pip findet alle Wheels** *(Glücksfall)*
+```powershell
+py -3.15 -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install --pre -r requirements.txt
+python main.py
+```
+
+**Szenario B — pedalboard / numpy haben kein 3.15-Wheel** *(häufiger in Alphas)*
+Dann muss aus dem Sourcecode kompiliert werden – dafür brauchst du:
+
+1. **Visual Studio Build Tools 2022** mit Workload *„Desktop development with C++"*
+   → https://visualstudio.microsoft.com/visual-cpp-build-tools/
+2. Danach:
+   ```powershell
+   pip install --pre --no-binary=:all: numpy
+   pip install --pre --no-binary=:all: pedalboard
+   ```
+   ⚠️ Numpy aus Source dauert **5–15 Minuten** und braucht ~2 GB RAM beim Build.
+
+**Szenario C — etwas funktioniert in 3.15 gar nicht** *(z. B. PyInstaller-Hooks)*
+Nur für den **Build** auf Python 3.13 zurückwechseln (Code läuft, nur die `.exe`-Erstellung ist betroffen):
+```powershell
+py -3.13 -m venv venv-build
+.\venv-build\Scripts\Activate.ps1
+pip install --pre -r requirements.txt pyinstaller
+.\build.bat
+```
+Die fertige `.exe` enthält ein gebündeltes Python und läuft unabhängig von der Systeminstallation.
+
+---
+
+## 📦 INSTALLATION (Endbenutzer)
 
 ### Schritt 1 — VB-CABLE installieren (**Pflicht** für Discord)
 
@@ -60,8 +100,6 @@
 6. **Echo-/Rauschunterdrückung**: ⛔ AUS (optional testen)
 7. **Lautstärke-Normalisierung**: ⛔ AUS
 
-*Tipp:* Zum Testen Discord-Einstellungen → *Mikrofon testen* drücken. Dein Gesprächspartner hört dich jetzt mit X-Print-Effekten.
-
 ---
 
 ## ⏱️ LATENZ & PERFORMANCE
@@ -83,12 +121,14 @@
 ## 🔧 BUILD FROM SOURCE
 
 ```powershell
-# Voraussetzung: Python 3.11 64-bit im PATH
+# Voraussetzung: Python 3.15.0a8 (oder 3.11+) im PATH oder via py-Launcher
 git clone https://github.com/nichtpascaltarter-sketch/xprint-voicechanger.git
 cd xprint-voicechanger
 
-# Development-Run (ohne Build)
-python -m pip install -r requirements.txt
+# Development-Run (legt automatisch venv an)
+py -3.15 -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install --pre -r requirements.txt
 python main.py
 
 # Single-File .exe bauen
@@ -111,8 +151,8 @@ xprint-voice/
 ├── main.py              # GUI + App-Lifecycle (customtkinter)
 ├── audio_engine.py      # sounddevice-Callback + pedalboard-Ketten
 ├── device_manager.py    # Device-Listing + VB-CABLE-Erkennung
-├── requirements.txt     # Python-Dependencies
-├── build.bat            # PyInstaller-Build-Script
+├── requirements.txt     # Python-Dependencies (unpinned für 3.15)
+├── build.bat            # PyInstaller-Build-Script (3.15-aware)
 ├── installer.iss        # Inno-Setup-Script
 ├── README.md            # Du bist hier
 └── dist/                # (nach build.bat)
@@ -125,14 +165,30 @@ xprint-voice/
 
 | Problem                                  | Lösung                                                                   |
 |------------------------------------------|--------------------------------------------------------------------------|
+| `No matching distribution found for pedalboard` | Python 3.15-Wheels noch nicht da → siehe Szenario B oben            |
+| `Microsoft Visual C++ 14.0 or greater required` | VS Build Tools 2022 mit C++-Workload installieren                   |
+| `ModuleNotFoundError: sounddevice`       | venv nicht aktiviert (`Activate.ps1`) oder falscher Python-Interpreter   |
 | *"CABLE Output" fehlt in Discord*        | Windows nach VB-CABLE-Install **neu starten**                            |
 | *Stimme knackst/stottert*                | Buffer auf 512 oder 1024 erhöhen                                         |
 | *Kein Input-Pegel sichtbar*              | Windows → *Datenschutz* → *Mikrofon* für Apps freigeben                  |
 | *Latenz zu hoch*                         | Beide Dropdowns auf **WASAPI** setzen, Buffer = 256                      |
-| *Stream-Start-Fehler*                    | Andere App (Teams/Zoom) nutzt exklusiv das Mikro → schließen             |
-| *Baby-Modus klingt zu chipmunkig*        | Normal bei extrem hohen Stimmen – Mikro-Abstand erhöhen, bei Low-Shelf bleiben |
-| *Echo in Discord*                        | AGC + Rauschunterdrückung in Discord aus, in Windows Mikro-Boost = 0 dB  |
+| *PyInstaller-Build crasht*               | Build mit Python 3.13 statt 3.15 (siehe Szenario C oben)                 |
 | *Installer verweigert Start*             | Als Administrator ausführen, SmartScreen → *Trotzdem ausführen*          |
+| `cannot be loaded because running scripts is disabled` | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`           |
+
+---
+
+## 🧪 PYTHON 3.15 – DEBUGGING
+
+Im Hotkey-Bereich oben rechts in der App erscheint bei Pre-Release-Python automatisch ein Hinweis (`⚠ Python 3.15 alpha8 -- experimentell`). So siehst du sofort, gegen welche Version die `.exe` gelinkt wurde.
+
+Bei Crashs lieferst du diese Infos:
+
+```powershell
+python --version
+python -c "import sounddevice, numpy, pedalboard; print(sounddevice.__version__, numpy.__version__, pedalboard.__version__)"
+python -c "import sounddevice as sd; [print(d) for d in sd.query_devices()]"
+```
 
 ---
 
@@ -158,6 +214,6 @@ Der Limiter am Ende verhindert Clipping auch bei lautem Input — wichtig für D
 ## 📝 LIZENZ / CREDITS
 
 © 2026 **X-Print**, Thun, Schweiz
-Powered by: Python 3.11 · customtkinter · sounddevice (PortAudio) · pedalboard (Spotify)
+Powered by: Python 3.15 · customtkinter · sounddevice (PortAudio) · pedalboard (Spotify)
 
 *VB-CABLE ist ein Produkt von VB-Audio Software, Donationware, **nicht** von X-Print.*
