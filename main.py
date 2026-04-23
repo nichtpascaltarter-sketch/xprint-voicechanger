@@ -11,14 +11,48 @@ Tastenkuerzel (bei fokussiertem Fenster):
 from __future__ import annotations
 
 import math
+import os
 import sys
-import webbrowser
 from tkinter import TclError, messagebox
-
-import customtkinter as ctk
 import tkinter as tk
+import webbrowser
 
-from audio_engine import AudioEngine, MODE_ADULT, MODE_BABY, MODE_BYPASS
+# --- Python-Version-Check (wichtig für 3.15-Alpha) -------------------------
+_MIN_PY = (3, 11)
+_TESTED_PY = (3, 15, 0)
+if sys.version_info[:2] < _MIN_PY:
+    msg = (f"Python {_MIN_PY[0]}.{_MIN_PY[1]}+ benoetigt, "
+           f"gefunden: {sys.version.split()[0]}")
+    try:
+        import tkinter.messagebox as _mb
+        _mb.showerror("Python-Version", msg)
+    except Exception:
+        print(msg, file=sys.stderr)
+    sys.exit(1)
+
+# --- Defensive Imports (geben hilfreiche Fehler statt Stacktraces) ---------
+def _fail_import(pkg: str, exc: BaseException) -> None:
+    msg = (f"Modul '{pkg}' konnte nicht importiert werden:\n{exc}\n\n"
+           "Loesung:\n"
+           "  pip install --pre -r requirements.txt\n\n"
+           "Bei Python 3.15-Alpha siehe README -> 'Alpha-Build'.")
+    try:
+        import tkinter.messagebox as _mb
+        _mb.showerror(f"Fehlende Abhaengigkeit: {pkg}", msg)
+    except Exception:
+        print(msg, file=sys.stderr)
+    sys.exit(1)
+
+try:
+    import customtkinter as ctk
+except Exception as e:
+    _fail_import("customtkinter", e)
+
+try:
+    from audio_engine import AudioEngine, MODE_ADULT, MODE_BABY, MODE_BYPASS
+except Exception as e:
+    _fail_import("audio_engine (sounddevice/pedalboard/numpy)", e)
+
 from device_manager import (
     AudioDevice,
     VB_CABLE_DOWNLOAD_URL,
@@ -70,7 +104,6 @@ class ModeCard(ctk.CTkFrame):
         self._active = False
         self._on_click = on_click
 
-        # Accent-Bar oben
         self._bar = tk.Frame(self, bg=COLOR_BORDER, height=3)
         self._bar.pack(fill="x", side="top")
 
@@ -92,7 +125,6 @@ class ModeCard(ctk.CTkFrame):
             except tk.TclError:
                 pass
 
-    # ------------------------------------------------ Events
     def _handle_click(self, _event=None):
         self._on_click()
 
@@ -127,7 +159,7 @@ class LevelMeter(ctk.CTkFrame):
         self._accent = accent
         self._level = 0.0
         self._peak_hold = 0.0
-        self._peak_hold_frames = 0  # Peak fuer N Frames halten
+        self._peak_hold_frames = 0
 
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(6, 0))
@@ -146,7 +178,6 @@ class LevelMeter(ctk.CTkFrame):
     def update_level(self, level: float) -> None:
         self._level = max(0.0, min(1.5, float(level)))
 
-        # Peak-Hold mit Decay
         if self._level >= self._peak_hold:
             self._peak_hold = self._level
             self._peak_hold_frames = 25
@@ -177,13 +208,11 @@ class LevelMeter(ctk.CTkFrame):
         if w < 4 or h < 4:
             return
 
-        # Hintergrund + dezente Zonen
         c.create_rectangle(0, 0, w, h, fill=COLOR_BG_DEEP, outline="")
 
         level = min(1.0, self._level)
         bar_w = int(w * level)
 
-        # Segment-Gradient: accent -> gelb -> rot
         segs = 64
         for i in range(segs):
             x1 = int(i * w / segs)
@@ -200,13 +229,11 @@ class LevelMeter(ctk.CTkFrame):
                 color = COLOR_ERROR
             c.create_rectangle(x1, 2, x2, h - 2, fill=color, outline="")
 
-        # Peak-Hold-Linie
         ph = min(1.0, self._peak_hold)
         px = int(w * ph)
         if px > 0:
             c.create_line(px, 0, px, h, fill=COLOR_TEXT, width=1)
 
-        # -6dB / -12dB Marker (referenz)
         for ref_db in (-6.0, -12.0):
             ref = 10 ** (ref_db / 20.0)
             rx = int(w * ref)
@@ -222,21 +249,21 @@ class VoiceChangerApp(ctk.CTk):
 
         ctk.set_appearance_mode("dark")
 
-        self.title("X-PRINT // VOICE CHANGER")
-        self.geometry("920x660")
+        title_suffix = ""
+        if sys.version_info[:2] != _TESTED_PY[:2]:
+            title_suffix = f"  [Py {sys.version_info.major}.{sys.version_info.minor}]"
+        self.title(f"X-PRINT // VOICE CHANGER{title_suffix}")
+        self.geometry("920x680")
         self.minsize(820, 600)
         self.configure(fg_color=COLOR_BG)
 
-        # Engine
         self.engine = AudioEngine()
 
-        # Name->ID Mappings (fuer Dropdown-Lookup)
         self._input_map: dict[str, int] = {}
         self._output_map: dict[str, int] = {}
         self._input_devices: list[AudioDevice] = []
         self._output_devices: list[AudioDevice] = []
 
-        # Hotkey-State
         self.bind("<F1>", lambda e: self._set_mode(MODE_BYPASS))
         self.bind("<F2>", lambda e: self._set_mode(MODE_ADULT))
         self.bind("<F3>", lambda e: self._set_mode(MODE_BABY))
@@ -246,6 +273,7 @@ class VoiceChangerApp(ctk.CTk):
         self._build_ui()
         self._load_devices()
         self._check_vb_cable()
+        self._show_alpha_warning_if_needed()
         self._start_audio()
         self._schedule_meters()
 
@@ -431,7 +459,6 @@ class VoiceChangerApp(ctk.CTk):
         self.input_dropdown.configure(values=in_names)
         self.output_dropdown.configure(values=out_names)
 
-        # Default-Input: System-Default (sonst erster Eintrag)
         def_in = default_input_device()
         in_selected = None
         if def_in is not None:
@@ -440,7 +467,6 @@ class VoiceChangerApp(ctk.CTk):
                     in_selected = d.display
                     break
         if in_selected is None and self._input_devices:
-            # WASAPI bevorzugen
             for d in self._input_devices:
                 if "WASAPI" in d.hostapi_name:
                     in_selected = d.display
@@ -450,7 +476,6 @@ class VoiceChangerApp(ctk.CTk):
         if in_selected:
             self.input_dropdown.set(in_selected)
 
-        # Default-Output: VB-CABLE (falls vorhanden), sonst System-Default
         cable = find_vb_cable_output()
         out_selected = None
         if cable is not None:
@@ -505,6 +530,15 @@ class VoiceChangerApp(ctk.CTk):
             self.cable_status.bind(
                 "<Button-1>", lambda _e: webbrowser.open(VB_CABLE_DOWNLOAD_URL))
 
+    def _show_alpha_warning_if_needed(self):
+        """Bei Pre-Release-Python ein dezenter Warnhinweis im Hotkey-Label."""
+        rel = sys.version_info.releaselevel  # 'alpha', 'beta', 'candidate', 'final'
+        if rel != "final":
+            self._hotkey_label.configure(
+                text=f"⚠ Python {sys.version_info.major}.{sys.version_info.minor} "
+                     f"{rel}{sys.version_info.serial} -- experimentell",
+                text_color=COLOR_WARN)
+
     # ------------------------------------------------------------------ Modes
     def _set_mode(self, mode: str):
         self.engine.set_mode(mode)
@@ -534,7 +568,6 @@ class VoiceChangerApp(ctk.CTk):
     def _refresh_latency(self):
         lat = self.engine.actual_latency_ms
         self.latency_label.configure(text=f"LATENCY  {lat:5.1f} ms")
-        # Faerbung: < 50ms = Cyan (gut), < 100ms = Orange, sonst Rot
         if 0 < lat < 50:
             self.latency_label.configure(text_color=COLOR_ACCENT_CYAN)
         elif lat < 100:
@@ -555,7 +588,7 @@ class VoiceChangerApp(ctk.CTk):
             self.meter_out.update_level(self.engine.output_level)
         except TclError:
             return
-        self.after(33, self._schedule_meters)  # ~30 fps
+        self.after(33, self._schedule_meters)
 
     # ------------------------------------------------------------------ Shutdown
     def _on_close(self):
@@ -567,11 +600,16 @@ class VoiceChangerApp(ctk.CTk):
 
 
 def main():
+    # Unbuffered console output - hilfreich fuer Alpha-Debugging
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+    print(f"X-Print Voice Changer  //  Python {sys.version.split()[0]}")
     try:
         app = VoiceChangerApp()
         app.mainloop()
     except Exception as e:
-        # Fallback-Fehlerdialog, falls beim Start etwas total schief geht
         try:
             messagebox.showerror("X-Print Voice Changer", f"Fataler Fehler:\n{e}")
         except Exception:
