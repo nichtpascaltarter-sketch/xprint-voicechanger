@@ -1,0 +1,10 @@
+# X-Print Voice Changer - Dependencies
+# Getestet mit Python 3.11 auf Windows 10/11 x64
+
+customtkinter==5.2.2
+sounddevice==0.4.7
+numpy==1.26.4
+pedalboard==0.9.16
+
+# Build-Zeit (optional, von build.bat installiert)
+# pyinstaller==6.11.1
